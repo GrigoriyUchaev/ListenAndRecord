@@ -1,0 +1,22 @@
+name: Build macOS app
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build app bundle
+        run: ./scripts/build_app.sh
+      - name: Package
+        run: cd build && ditto -c -k --keepParent ListenAndRecord.app ListenAndRecord.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ListenAndRecord
+          path: build/ListenAndRecord.zip
