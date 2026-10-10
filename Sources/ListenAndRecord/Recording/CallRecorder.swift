@@ -214,12 +214,12 @@ final class CallRecorder: ObservableObject {
         }
         guard let latest = dated.max(by: { $0.1 < $1.1 }) else { return nil }
         let (dir, date) = latest
-        let tracks = tracks(in: dir)
-        let duration = tracks.compactMap { url -> Double? in
+        let found = tracks(in: dir)
+        let duration = found.compactMap { url -> Double? in
             guard let f = try? AVAudioFile(forReading: url) else { return nil }
             return Double(f.length) / f.fileFormat.sampleRate
         }.max() ?? 0
         guard duration > 0.5 else { return nil }
-        return FinishedRecording(directory: dir, tracks: tracks, duration: duration, startedAt: date)
+        return FinishedRecording(directory: dir, tracks: found, duration: duration, startedAt: date)
     }
 }
