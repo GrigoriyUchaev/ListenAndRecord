@@ -3,7 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
-    @State private var mp3Encoder: URL?
+    @StateObject private var encoder = EncoderState()
 
     var body: some View {
         ScrollView {
@@ -19,7 +19,7 @@ struct SettingsView: View {
         }
         .task {
             _ = await settings.loadCapabilities()
-            mp3Encoder = await Task.detached { AudioExporter.mp3Encoder }.value
+            encoder.url = await Task.detached { AudioExporter.mp3Encoder }.value
         }
     }
 
@@ -86,7 +86,7 @@ struct SettingsView: View {
     private var recordingCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Запись").font(.headline)
-            if let enc = mp3Encoder {
+            if let enc = encoder.url {
                 Label("MP3: используется \(enc.lastPathComponent) (\(enc.path))", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             } else {
@@ -124,4 +124,9 @@ struct SettingsView: View {
         if let directory { panel.directoryURL = URL(fileURLWithPath: directory) }
         if panel.runModal() == .OK, let url = panel.url { completion(url) }
     }
+}
+
+@MainActor
+final class EncoderState: ObservableObject {
+    @Published var url: URL?
 }

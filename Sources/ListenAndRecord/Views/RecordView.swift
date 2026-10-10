@@ -6,8 +6,9 @@ struct RecordView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var transcriber: TranscriptionController
     @EnvironmentObject private var navigation: NavigationModel
-    @State private var fileName = ""
-    @State private var confirmDiscard = false
+    // Plain ObservableObject instead of @State: in newer SDKs @State is a macro whose
+    // plugin ships only with full Xcode, so Command Line Tools builds would fail.
+    @StateObject private var form = RecordFormState()
 
     var body: some View {
         ScrollView {
@@ -24,8 +25,8 @@ struct RecordView: View {
             }
             .padding(8)
         }
-        .onAppear { if fileName.isEmpty { fileName = defaultName } }
-        .onChange(of: recorder.finished?.id) { _, _ in fileName = defaultName }
+        .onAppear { if form.fileName.isEmpty { form.fileName = defaultName } }
+        .onChange(of: recorder.finished?.id) { _, _ in form.fileName = defaultName }
     }
 
     private var defaultName: String {
@@ -135,7 +136,7 @@ struct RecordView: View {
             }
             HStack {
                 Text("Имя файла:").frame(width: 90, alignment: .leading)
-                TextField("Например: Планёрка с командой", text: $fileName)
+                TextField("Например: Планёрка с командой", text: $form.fileName)
                     .textFieldStyle(.roundedBorder)
             }
             HStack {
@@ -151,7 +152,7 @@ struct RecordView: View {
             } else {
                 HStack {
                     Button {
-                        Task { await recorder.save(name: fileName, format: settings.audioFormat) }
+                        Task { await recorder.save(name: form.fileName, format: settings.audioFormat) }
                     } label: {
                         Label("Сохранить…", systemImage: "square.and.arrow.down")
                     }
@@ -159,7 +160,7 @@ struct RecordView: View {
                     .keyboardShortcut("s", modifiers: .command)
                     Spacer()
                     Button(role: .destructive) {
-                        confirmDiscard = true
+                        form.confirmDiscard = true
                     } label: {
                         Label(finished.savedTo == nil ? "Удалить запись" : "Закрыть", systemImage: "trash")
                     }
@@ -184,7 +185,7 @@ struct RecordView: View {
         }
         .card()
         .confirmationDialog(finished.savedTo == nil ? "Удалить несохранённую запись?" : "Закрыть запись?",
-                            isPresented: $confirmDiscard) {
+                            isPresented: $form.confirmDiscard) {
             Button(finished.savedTo == nil ? "Удалить" : "Закрыть", role: .destructive) { recorder.discard() }
         } message: {
             Text(finished.savedTo == nil ? "Это действие нельзя отменить." : "Сохранённый файл останется на месте.")
@@ -219,4 +220,10 @@ struct RecordView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 4)
     }
+}
+
+@MainActor
+final class RecordFormState: ObservableObject {
+    @Published var fileName = ""
+    @Published var confirmDiscard = false
 }

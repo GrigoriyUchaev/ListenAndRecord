@@ -5,7 +5,7 @@ struct TranscribeView: View {
     @EnvironmentObject private var transcriber: TranscriptionController
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var navigation: NavigationModel
-    @State private var isDropTargeted = false
+    @StateObject private var drop = DropState()
 
     var body: some View {
         ScrollView {
@@ -60,12 +60,12 @@ struct TranscribeView: View {
             .frame(maxWidth: .infinity)
             .background(RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
-                .foregroundStyle(isDropTargeted ? Color.accentColor : Color.secondary.opacity(0.4)))
+                .foregroundStyle(drop.isTargeted ? Color.accentColor : Color.secondary.opacity(0.4)))
             .dropDestination(for: URL.self) { urls, _ in
                 guard let url = urls.first, !transcriber.isRunning else { return false }
                 transcriber.select(url)
                 return true
-            } isTargeted: { isDropTargeted = $0 }
+            } isTargeted: { drop.isTargeted = $0 }
         }
         .card()
     }
@@ -184,4 +184,9 @@ struct TranscribeView: View {
         }
         .card()
     }
+}
+
+@MainActor
+final class DropState: ObservableObject {
+    @Published var isTargeted = false
 }
