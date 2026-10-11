@@ -12,7 +12,7 @@ struct ContentView: View {
                 .tabItem { Label("Расшифровка", systemImage: "text.quote") }
                 .tag(AppTab.transcribe)
             SettingsView()
-                .tabItem { Label("Настройки", systemImage: "gearshape") }
+                .tabItem { Label("Модели и настройки", systemImage: "cpu") }
                 .tag(AppTab.settings)
         }
         .padding(12)

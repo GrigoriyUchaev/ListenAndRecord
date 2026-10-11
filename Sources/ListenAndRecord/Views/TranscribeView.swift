@@ -5,12 +5,13 @@ struct TranscribeView: View {
     @EnvironmentObject private var transcriber: TranscriptionController
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var navigation: NavigationModel
+    @EnvironmentObject private var models: ModelManager
     @StateObject private var drop = DropState()
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if settings.whisperURL == nil || settings.modelURL == nil {
+                if models.selectedModelURL == nil {
                     setupWarning
                 }
                 fileCard
@@ -26,11 +27,11 @@ struct TranscribeView: View {
 
     private var setupWarning: some View {
         HStack {
-            Label(settings.whisperURL == nil ? "Не найден whisper-cli." : "Не выбрана модель Whisper.",
+            Label("Не выбрана модель распознавания — скачайте её (один раз).",
                   systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             Spacer()
-            Button("Открыть настройки") { navigation.tab = .settings }
+            Button("Открыть «Модели»") { navigation.tab = .settings }
         }
         .card()
     }
@@ -83,6 +84,15 @@ struct TranscribeView: View {
                     .frame(maxWidth: 260)
                 }
                 GridRow {
+                    Text("Модель:")
+                    Picker("", selection: $models.selectedPath) {
+                        if models.selectedModelURL == nil { Text("не выбрана").tag(models.selectedPath) }
+                        ForEach(models.installedModels) { Text($0.title).tag($0.path) }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 260)
+                }
+                GridRow {
                     Text("Формат файла:")
                     Picker("", selection: $settings.transcriptFormat) {
                         ForEach(TranscriptFormat.allCases) { Text($0.title).tag($0) }
@@ -120,7 +130,7 @@ struct TranscribeView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(transcriber.inputURL == nil || settings.whisperURL == nil || settings.modelURL == nil)
+                    .disabled(transcriber.inputURL == nil || models.selectedModelURL == nil)
                     Spacer()
                     Text("Распознавание идёт локально на Mac, без интернета.")
                         .font(.caption).foregroundStyle(.secondary)

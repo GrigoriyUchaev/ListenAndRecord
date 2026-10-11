@@ -18,6 +18,11 @@ struct ListenAndRecordApp: App {
     @StateObject private var transcriber = TranscriptionController.shared
     @StateObject private var settings = AppSettings.shared
     @StateObject private var navigation = NavigationModel.shared
+    @StateObject private var models = ModelManager.shared
+
+    init() {
+        SelfTest.runIfRequested()
+    }
 
     var body: some Scene {
         Window("ListenAndRecord", id: "main") {
@@ -26,6 +31,7 @@ struct ListenAndRecordApp: App {
                 .environmentObject(transcriber)
                 .environmentObject(settings)
                 .environmentObject(navigation)
+                .environmentObject(models)
                 .frame(minWidth: 620, minHeight: 640)
         }
         .windowResizability(.contentMinSize)
@@ -58,7 +64,7 @@ extension CallRecorder {
         switch state {
         case .recording: return "record.circle.fill"
         case .paused: return "pause.circle.fill"
-        default: return "waveform.circle"
+        default: return "megaphone"
         }
     }
 }

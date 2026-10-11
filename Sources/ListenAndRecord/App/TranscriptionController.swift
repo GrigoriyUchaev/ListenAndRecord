@@ -20,6 +20,7 @@ final class TranscriptionController: ObservableObject {
     @Published private(set) var startedAt: Date?
 
     private var task: Task<Void, Never>?
+    private var engine: WhisperEngine?
 
     var isRunning: Bool { phase == .running }
 
@@ -57,24 +58,25 @@ final class TranscriptionController: ObservableObject {
             savedURL = nil
             startedAt = Date()
             do {
-                guard let exe = settings.whisperURL else {
-                    throw SetupError("Не найден whisper-cli. Укажите путь на вкладке «Настройки» (установка: brew install whisper-cpp).")
+                guard let model = ModelManager.shared.selectedModelURL else {
+                    throw SetupError("Не выбрана модель распознавания. Скачайте или выберите её на вкладке «Модели».")
                 }
-                guard let model = settings.modelURL else {
-                    throw SetupError("Не найдена модель Whisper (например, ggml-large-v3-turbo.bin). Укажите её на вкладке «Настройки».")
-                }
-                guard let caps = await settings.loadCapabilities() else { throw SetupError("Не удалось запустить whisper-cli.") }
-                let vad = settings.useVAD && settings.vadModelInstalled && caps.supportsVAD
-                let whisper = WhisperRunner(settings: WhisperSettings(
-                    executable: exe, model: model,
-                    vadModel: vad ? AppSettings.vadModelURL : nil,
+                let vadURL = ModelManager.vadModelURL
+                let useVAD = settings.useVAD && FileManager.default.fileExists(atPath: vadURL.path)
+                let options = WhisperDecodeOptions(
                     language: settings.language,
                     threads: max(4, min(8, ProcessInfo.processInfo.activeProcessorCount)),
-                    capabilities: caps))
-                let pipeline = TranscriptionPipeline(whisper: whisper, useVAD: vad, recoverGaps: settings.recoverGaps,
-                                                     prepare: AudioPreparer.prepare)
-                let work = Task.detached(priority: .userInitiated) {
-                    try await pipeline.run(source: source) { stage in
+                    beamSize: settings.highAccuracy ? 5 : 1,
+                    vadModelPath: useVAD ? vadURL.path : nil)
+                let recover = settings.recoverGaps
+                let cached = engine?.modelPath == model.path ? engine : nil
+                if cached == nil { stageText = TranscriptionStage.loadingModel.title }
+                let work = Task.detached(priority: .userInitiated) { () -> (Transcript, WhisperEngine) in
+                    // Loading a model takes a few seconds; keep it for the next transcription.
+                    let engine = try cached ?? WhisperEngine(modelPath: model.path)
+                    let pipeline = TranscriptionPipeline(engine: engine, options: options, recoverGaps: recover,
+                                                         prepare: AudioPreparer.prepare)
+                    let transcript = try await pipeline.run(source: source) { stage in
                         Task { @MainActor in
                             let c = TranscriptionController.shared
                             guard c.isRunning else { return }
@@ -82,13 +84,15 @@ final class TranscriptionController: ObservableObject {
                             c.progress = max(c.progress, stage.fraction)
                         }
                     }
+                    return (transcript, engine)
                 }
                 // Cancelling the UI task must also stop whisper running in the detached task.
-                let result = try await withTaskCancellationHandler {
+                let (result, usedEngine) = try await withTaskCancellationHandler {
                     try await work.value
                 } onCancel: {
                     work.cancel()
                 }
+                engine = usedEngine
                 transcript = result
                 progress = 1
                 phase = .finished

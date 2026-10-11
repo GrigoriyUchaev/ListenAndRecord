@@ -1,4 +1,4 @@
-name: Build macOS app
+name: Build
 
 on:
   push:
@@ -6,17 +6,81 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  macos:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Swift version
         run: swift --version
-      - name: Build app bundle
+      - name: Build app bundle (whisper.cpp embedded)
         run: ./scripts/build_app.sh
+      - name: Self-test — transcribe a recording with long pauses
+        run: |
+          curl -sSL -o /tmp/jfk.wav https://github.com/ggml-org/whisper.cpp/raw/v1.9.2/samples/jfk.wav
+          python3 tests/make_pause_sample.py /tmp/jfk.wav /tmp/pause.wav
+          curl -sSL -o /tmp/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+          build/ListenAndRecord.app/Contents/MacOS/ListenAndRecord --selftest /tmp/ggml-base.bin /tmp/pause.wav > /tmp/out.txt
+          python3 tests/check_transcript.py /tmp/out.txt
       - name: Package
-        run: cd build && ditto -c -k --keepParent ListenAndRecord.app ListenAndRecord.zip
+        run: cd build && ditto -c -k --keepParent ListenAndRecord.app ListenAndRecord-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: ListenAndRecord
-          path: build/ListenAndRecord.zip
+          name: ListenAndRecord-macOS
+          path: build/ListenAndRecord-macOS.zip
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Cache whisper.cpp build
+        id: whisper-cache
+        uses: actions/cache@v4
+        with:
+          path: windows/ListenAndRecord/whisper
+          key: whisper-win-v1.9.2-${{ hashFiles('scripts/build-whisper-windows.ps1') }}
+      - name: Build whisper.cpp (all CPU variants)
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./scripts/build-whisper-windows.ps1
+      - name: Publish app
+        shell: pwsh
+        run: dotnet publish windows/ListenAndRecord/ListenAndRecord.csproj -c Release -r win-x64 --self-contained true -o build/windows-publish
+      - name: Self-test — transcribe a recording with long pauses
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/ggml-org/whisper.cpp/raw/v1.9.2/samples/jfk.wav -OutFile jfk.wav
+          python tests/make_pause_sample.py jfk.wav pause.wav
+          Invoke-WebRequest https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin -OutFile ggml-base.bin
+          $p = Start-Process build/windows-publish/ListenAndRecord.exe -ArgumentList "--selftest","ggml-base.bin","pause.wav","out.txt" -Wait -PassThru
+          python tests/check_transcript.py out.txt
+          if ($LASTEXITCODE -ne 0 -or $p.ExitCode -ne 0) { exit 1 }
+      - name: Self-test — old CPU without AVX/AVX2 (SSE4.2 code path, like Core i5-760)
+        shell: pwsh
+        run: |
+          $dir = "build/noavx"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item build/windows-publish/whisper/whisper-cli.exe, build/windows-publish/whisper/whisper.dll, build/windows-publish/whisper/ggml.dll, build/windows-publish/whisper/ggml-base.dll $dir
+          Copy-Item build/windows-publish/whisper/ggml-cpu-sse42.dll $dir
+          Copy-Item jfk.wav $dir
+          Push-Location $dir
+          ./whisper-cli.exe -m ../../ggml-base.bin -f jfk.wav -l en -t 2 -mc 0 2>&1 | Tee-Object -FilePath noavx.log
+          Pop-Location
+          if (-not (Select-String -Path "$dir/noavx.log" -Pattern "country" -Quiet)) { exit 1 }
+          Select-String -Path "$dir/noavx.log" -Pattern "CPU|backend|sse" | Select-Object -First 10
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows/installer.iss
+      - name: Package portable zip
+        shell: pwsh
+        run: Compress-Archive -Path build/windows-publish/* -DestinationPath build/ListenAndRecord-Windows-portable.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ListenAndRecord-Windows
+          path: |
+            build/ListenAndRecord-Setup.exe
+            build/ListenAndRecord-Windows-portable.zip

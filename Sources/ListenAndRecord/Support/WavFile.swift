@@ -46,6 +46,19 @@ final class WavSliceReader {
         return try handle.read(upToCount: (e - s) * 2) ?? Data()
     }
 
+    /// Concatenation of `pieces` as float samples (-1...1) for whisper.cpp.
+    func floats(pieces: [AudioPiece]) throws -> [Float] {
+        var out: [Float] = []
+        out.reserveCapacity(pieces.reduce(0) { $0 + $1.length })
+        for piece in pieces {
+            let data = try samples(start: piece.start, length: piece.length)
+            data.withUnsafeBytes { raw in
+                for s in raw.bindMemory(to: Int16.self) { out.append(Float(Int16(littleEndian: s)) / 32768) }
+            }
+        }
+        return out
+    }
+
     /// Writes the concatenation of `pieces` as a standalone WAV file.
     func write(pieces: [AudioPiece], to destination: URL, sampleRate: Int = 16_000) throws {
         var body = Data()
