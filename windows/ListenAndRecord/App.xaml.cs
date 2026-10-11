@@ -36,7 +36,8 @@ public partial class App : Application
             var settings = new WhisperSettings(Path.GetFullPath(model), null, "en", Hardware.Threads, 5);
             var pipeline = new TranscriptionPipeline(settings, useVad: false, recoverGaps: true);
             var transcript = await pipeline.RunAsync(Path.GetFullPath(audio), _ => { }, CancellationToken.None);
-            File.WriteAllText(output, $"CPU: {Hardware.Summary}\n" + TranscriptExporter.PlainText(transcript, true));
+            File.WriteAllText(output, $"CPU: {Hardware.Summary}\n" + TranscriptExporter.PlainText(transcript, true) + "\n" +
+                string.Join("\n", transcript.Segments.Select(s => $"  [{s.Start,7:0.00} – {s.End,7:0.00}] {s.Text}")));
             TranscriptExporter.Save(transcript, Path.ChangeExtension(output, ".docx"), true, true);
             if (transcript.Segments.Count == 0) code = 2;
         }

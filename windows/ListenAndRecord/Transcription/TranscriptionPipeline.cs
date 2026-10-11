@@ -54,7 +54,7 @@ public sealed class TranscriptionPipeline(WhisperSettings settings, bool useVad,
                 }
             }
 
-            var segments = TranscriptCleaner.Clean(perChunk.SelectMany(x => x).OrderBy(s => s.Start));
+            var segments = TranscriptCleaner.Clean(perChunk.SelectMany(x => x).OrderBy(s => s.Start), collapseLoops: false);
             return new Transcript
             {
                 SourceName = Path.GetFileName(source),

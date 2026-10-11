@@ -120,7 +120,9 @@ public static class TranscriptCleaner
         return HallucinationMarkers.Any(n.Contains);
     }
 
-    public static List<TranscriptSegment> Clean(IEnumerable<TranscriptSegment> segments)
+    /// <param name="collapseLoops">Drop a phrase repeated 3+ times back to back. Only safe within one
+    /// Whisper call: across chunks the same words can legitimately recur (e.g. "Да." … "Да.").</param>
+    public static List<TranscriptSegment> Clean(IEnumerable<TranscriptSegment> segments, bool collapseLoops = true)
     {
         var output = new List<TranscriptSegment>();
         int repeat = 0;
@@ -128,7 +130,8 @@ public static class TranscriptCleaner
         {
             var seg = s with { Text = s.Text.Trim() };
             if (seg.Text.Length == 0 || IsAnnotationOnly(seg.Text) || IsHallucination(seg.Text)) continue;
-            if (output.Count > 0 && Normalized(output[^1].Text) == Normalized(seg.Text))
+            if (collapseLoops && output.Count > 0 && seg.Start - output[^1].End < 1.5 &&
+                Normalized(output[^1].Text) == Normalized(seg.Text))
             {
                 repeat++;
                 // A phrase repeated 3+ times in a row is a decoding loop, not speech.

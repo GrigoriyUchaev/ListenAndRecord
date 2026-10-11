@@ -20,6 +20,9 @@ enum SelfTest {
                                                      prepare: AudioPreparer.prepare)
                 let transcript = try await pipeline.run(source: audio) { _ in }
                 print(TranscriptExporter.plainText(transcript, timestamps: true))
+                for s in transcript.segments {
+                    print(String(format: "  [%7.2f – %7.2f] ", s.start, s.end) + s.text)
+                }
                 if transcript.segments.isEmpty { result.value = 2 }
             } catch {
                 print("ERROR: \(error.localizedDescription)")

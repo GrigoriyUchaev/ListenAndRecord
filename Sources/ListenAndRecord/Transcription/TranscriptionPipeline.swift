@@ -101,7 +101,7 @@ final class TranscriptionPipeline {
             }
         }
 
-        let segments = TranscriptCleaner.clean(perChunk.flatMap { $0 }.sorted { $0.start < $1.start })
+        let segments = TranscriptCleaner.clean(perChunk.flatMap { $0 }.sorted { $0.start < $1.start }, collapseLoops: false)
         return Transcript(sourceName: source.lastPathComponent, duration: audio.duration,
                           language: options.language, segments: segments)
     }

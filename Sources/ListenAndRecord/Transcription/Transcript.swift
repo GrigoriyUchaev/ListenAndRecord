@@ -89,13 +89,16 @@ enum TranscriptCleaner {
         return hallucinationMarkers.contains { n.contains($0) }
     }
 
-    static func clean(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
+    /// - Parameter collapseLoops: drop a phrase repeated 3+ times back to back. Only safe within one
+    ///   Whisper call: across chunks the same words can legitimately recur (e.g. "Да." … "Да.").
+    static func clean(_ segments: [TranscriptSegment], collapseLoops: Bool = true) -> [TranscriptSegment] {
         var out: [TranscriptSegment] = []
         var repeatCount = 0
         for var seg in segments {
             seg.text = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if seg.text.isEmpty || isAnnotationOnly(seg.text) || isHallucination(seg.text) { continue }
-            if let prev = out.last, normalized(prev.text) == normalized(seg.text) {
+            if collapseLoops, let prev = out.last, seg.start - prev.end < 1.5,
+               normalized(prev.text) == normalized(seg.text) {
                 repeatCount += 1
                 // A phrase repeated 3+ times in a row is a decoding loop, not speech.
                 if repeatCount >= 2 { out[out.count - 1].end = max(prev.end, seg.end); continue }
