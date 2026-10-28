@@ -14,7 +14,13 @@ result = subprocess.run(
 )
 print(result.stdout)
 print(result.stderr, file=sys.stderr)
+for line in (result.stdout + "\n" + result.stderr).splitlines():
+    if "LIFECYCLE ERROR:" in line:
+        # Surface the actual failure in the Actions summary as well as the logs.
+        escaped = line.replace("%", "%25").replace("\r", "%0D")
+        print(f"::error::{escaped}")
 if result.returncode != 0:
+    print(f"::error::Lifecycle process exited with code {result.returncode}")
     raise SystemExit(f"Lifecycle check failed: exit code {result.returncode}")
 if "LIFECYCLE: close/reopen passed; requesting normal quit" not in result.stdout:
     raise SystemExit("Lifecycle check did not finish its window checks")
