@@ -44,7 +44,7 @@
 - Репозиторий: `https://github.com/GrigoriyUchaev/ListenAndRecord`, рабочая ветка **`claude/mac-call-recording-app-ok2rkp`**
   (ветки `main` пока нет — это единственная ветка). Последний проверенный коммит: `e923c6c`.
 - CI (GitHub Actions, `.github/workflows/build.yml`) **зелёный** на обеих платформах: сборка + самотест расшифровки.
-- Готовые сборки — артефакты CI: `ListenAndRecord-macOS` (zip с .app), `ListenAndRecord-Windows`
+- Готовые сборки — артефакты CI: `ListenAndRecord-macOS` (ZIP GitHub с `ListenAndRecord.dmg` внутри), `ListenAndRecord-Windows`
   (`ListenAndRecord-Setup.exe` — установщик Inno Setup без прав администратора, и portable zip).
 
 **Что проверено автоматически:**
@@ -68,6 +68,8 @@
 Package.swift                      SwiftPM: executableTarget + binaryTarget "whisper" (xcframework v1.9.2, URL+checksum)
 Resources/Info.plist, AppIcon.*    plist .app (иконка, NSMicrophoneUsageDescription и др.)
 scripts/build_app.sh               сборка ListenAndRecord.app (swift build → бандл → whisper.framework в Contents/Frameworks → rpath → ad-hoc codesign)
+scripts/package-macos.sh           образ ListenAndRecord.dmg с приложением и ярлыком Applications
+tests/check_macos_package.sh       монтирует DMG, копирует приложение, проверяет подпись и запуск/выход после расшифровки
 scripts/build-whisper-windows.ps1  сборка whisper.cpp под Windows (MSVC, все CPU-варианты) → windows/ListenAndRecord/whisper/
 tests/make_pause_sample.py         делает тестовый WAV с длинными паузами из samples/jfk.wav
 tests/check_transcript.py          проверяет, что все 3 повтора фразы распознаны

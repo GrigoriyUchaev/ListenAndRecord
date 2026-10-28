@@ -34,11 +34,13 @@ jobs:
       - name: Quit after transcription — release cached Metal model before exit
         run: python3 tests/check_lifecycle.py build/ListenAndRecord.app/Contents/MacOS/ListenAndRecord /tmp/ggml-base.bin /tmp/jfk.wav
       - name: Package
-        run: cd build && ditto -c -k --keepParent ListenAndRecord.app ListenAndRecord-macOS.zip
+        run: bash scripts/package-macos.sh
+      - name: Verify installation from the disk image and quit after transcription
+        run: bash tests/check_macos_package.sh /tmp/ggml-base.bin /tmp/jfk.wav
       - uses: actions/upload-artifact@v4
         with:
           name: ListenAndRecord-macOS
-          path: build/ListenAndRecord-macOS.zip
+          path: build/ListenAndRecord.dmg
 
   windows:
     runs-on: windows-2022
