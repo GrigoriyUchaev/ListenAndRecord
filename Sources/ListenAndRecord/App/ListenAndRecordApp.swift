@@ -26,7 +26,7 @@ struct ListenAndRecordApp: App {
 
     var body: some Scene {
         Window("ListenAndRecord", id: "main") {
-            ContentView()
+            MainWindowContent(appDelegate: appDelegate)
                 .environmentObject(recorder)
                 .environmentObject(transcriber)
                 .environmentObject(settings)
@@ -59,6 +59,23 @@ struct ListenAndRecordApp: App {
     }
 }
 
+/// Keep SwiftUI's window-opening action available even after the window is closed.
+private struct MainWindowContent: View {
+    let appDelegate: AppDelegate
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        ContentView()
+            .onAppear {
+                let open = openWindow
+                appDelegate.openMainWindow = {
+                    open(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
+    }
+}
+
 extension CallRecorder {
     var menuBarSymbol: String {
         switch state {
@@ -71,21 +88,41 @@ extension CallRecorder {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    var openMainWindow: (() -> Void)?
+    private var terminationTask: Task<Void, Never>?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        LifecycleSelfTest.runIfRequested(delegate: self)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false // Closing the window must leave recording and the menu bar available.
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openMainWindow?()
+        return false // SwiftUI recreates the single main window, including when none remain.
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard terminationTask == nil else { return .terminateLater }
         let recorder = CallRecorder.shared
-        guard recorder.isActive || recorder.hasUnsaved else { return .terminateNow }
-        let alert = NSAlert()
-        alert.messageText = recorder.isActive ? "Идёт запись созвона" : "Запись не сохранена"
-        alert.informativeText = recorder.isActive
-            ? "Если выйти сейчас, запись будет остановлена. Её можно будет сохранить при следующем запуске."
-            : "Несохранённая запись останется и будет предложена при следующем запуске."
-        alert.addButton(withTitle: "Отмена")
-        alert.addButton(withTitle: "Выйти")
-        guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
-        if recorder.isActive {
-            Task { @MainActor in
+        if recorder.isActive || recorder.hasUnsaved {
+            let alert = NSAlert()
+            alert.messageText = recorder.isActive ? "Идёт запись созвона" : "Запись не сохранена"
+            alert.informativeText = recorder.isActive
+                ? "Если выйти сейчас, запись будет остановлена. Её можно будет сохранить при следующем запуске."
+                : "Несохранённая запись останется и будет предложена при следующем запуске."
+            alert.addButton(withTitle: "Отмена")
+            alert.addButton(withTitle: "Выйти")
+            guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+        }
+        let transcriber = TranscriptionController.shared
+        if recorder.isActive || transcriber.hasPendingWork {
+            terminationTask = Task { @MainActor in
                 await recorder.stop()
-                NSApp.reply(toApplicationShouldTerminate: true)
+                await transcriber.stopForTermination()
+                sender.reply(toApplicationShouldTerminate: true)
             }
             return .terminateLater
         }

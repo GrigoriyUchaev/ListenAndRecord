@@ -20,9 +20,12 @@ final class TranscriptionController: ObservableObject {
     @Published private(set) var startedAt: Date?
 
     private var task: Task<Void, Never>?
+    // Keep cancelled workers until they actually finish: whisper's abort is cooperative.
+    private var pendingWork: [UUID: Task<(Transcript, WhisperEngine), Error>] = [:]
     private var engine: WhisperEngine?
 
     var isRunning: Bool { phase == .running }
+    var hasPendingWork: Bool { task != nil || !pendingWork.isEmpty }
 
     func select(_ url: URL) {
         guard !isRunning else { return }
@@ -71,6 +74,7 @@ final class TranscriptionController: ObservableObject {
                 let recover = settings.recoverGaps
                 let cached = engine?.modelPath == model.path ? engine : nil
                 if cached == nil { stageText = TranscriptionStage.loadingModel.title }
+                let workID = UUID()
                 let work = Task.detached(priority: .userInitiated) { () -> (Transcript, WhisperEngine) in
                     // Loading a model takes a few seconds; keep it for the next transcription.
                     let engine = try cached ?? WhisperEngine(modelPath: model.path)
@@ -86,6 +90,8 @@ final class TranscriptionController: ObservableObject {
                     }
                     return (transcript, engine)
                 }
+                pendingWork[workID] = work
+                defer { pendingWork.removeValue(forKey: workID) }
                 // Cancelling the UI task must also stop whisper running in the detached task.
                 let (result, usedEngine) = try await withTaskCancellationHandler {
                     try await work.value
@@ -111,6 +117,18 @@ final class TranscriptionController: ObservableObject {
         task = nil
         phase = .idle
         stageText = "Отменено"
+    }
+
+    /// Do not tear down AppKit/Metal while a detached whisper worker is still using them.
+    func stopForTermination() async {
+        let currentTask = task
+        currentTask?.cancel()
+        let workers = Array(pendingWork.values)
+        for worker in workers { worker.cancel() }
+        await currentTask?.value
+        for worker in workers { _ = await worker.result }
+        task = nil
+        engine = nil
     }
 
     func save(format: TranscriptFormat, timestamps: Bool) {

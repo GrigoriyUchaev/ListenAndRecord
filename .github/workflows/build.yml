@@ -14,6 +14,8 @@ jobs:
         run: swift --version
       - name: Build app bundle (whisper.cpp embedded)
         run: ./scripts/build_app.sh
+      - name: Window lifecycle — close, reopen from Dock callback, quit normally
+        run: python3 tests/check_lifecycle.py build/ListenAndRecord.app/Contents/MacOS/ListenAndRecord
       - name: Self-test — transcribe a recording with long pauses
         run: |
           curl -sSL -o /tmp/jfk.wav https://github.com/ggml-org/whisper.cpp/raw/v1.9.2/samples/jfk.wav
