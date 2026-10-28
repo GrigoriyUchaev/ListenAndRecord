@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 struct MenuBarView: View {
+    let showMainWindow: () -> Void
     @EnvironmentObject private var recorder: CallRecorder
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -31,7 +31,6 @@ struct MenuBarView: View {
     }
 
     private func showWindow() {
-        openWindow(id: "main")
-        NSApp.activate(ignoringOtherApps: true)
+        showMainWindow()
     }
 }

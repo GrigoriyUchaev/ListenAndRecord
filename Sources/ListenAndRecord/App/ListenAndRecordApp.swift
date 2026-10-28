@@ -25,7 +25,7 @@ struct ListenAndRecordApp: App {
     }
 
     var body: some Scene {
-        Window("ListenAndRecord", id: "main") {
+        WindowGroup("ListenAndRecord", id: "main") {
             MainWindowContent(appDelegate: appDelegate)
                 .environmentObject(recorder)
                 .environmentObject(transcriber)
@@ -35,7 +35,6 @@ struct ListenAndRecordApp: App {
                 .frame(minWidth: 620, minHeight: 640)
         }
         .windowResizability(.contentMinSize)
-        .presentMainWindowOnLaunch()
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Запись") {
@@ -52,22 +51,10 @@ struct ListenAndRecordApp: App {
         }
 
         MenuBarExtra {
-            MenuBarView()
+            MenuBarView(showMainWindow: { appDelegate.openMainWindow?() })
                 .environmentObject(recorder)
         } label: {
             Image(systemName: recorder.menuBarSymbol)
-        }
-    }
-}
-
-private extension Scene {
-    @SceneBuilder
-    func presentMainWindowOnLaunch() -> some Scene {
-        if #available(macOS 15.0, *) {
-            // A singleton Window can otherwise restore its last, closed state on relaunch.
-            self.defaultLaunchBehavior(.presented)
-        } else {
-            self
         }
     }
 }
@@ -82,7 +69,12 @@ private struct MainWindowContent: View {
             .onAppear {
                 let open = openWindow
                 appDelegate.openMainWindow = {
-                    open(id: "main")
+                    if let window = NSApp.windows.first(where: { $0.title == "ListenAndRecord" && $0.canBecomeMain }) {
+                        window.deminiaturize(nil)
+                        window.makeKeyAndOrderFront(nil)
+                    } else {
+                        open(id: "main")
+                    }
                     NSApp.activate(ignoringOtherApps: true)
                 }
             }
