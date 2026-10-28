@@ -16,25 +16,38 @@ if len(sys.argv) == 4:
     environment["LISTENANDRECORD_LIFECYCLE_MODEL"] = os.path.abspath(sys.argv[2])
     environment["LISTENANDRECORD_LIFECYCLE_AUDIO"] = os.path.abspath(sys.argv[3])
 
-result = subprocess.run(
+process = subprocess.Popen(
     [sys.argv[1], "--lifecycle-selftest"],
     env=environment,
-    capture_output=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
     text=True,
-    timeout=240,
 )
-print(result.stdout)
-print(result.stderr, file=sys.stderr)
-for line in (result.stdout + "\n" + result.stderr).splitlines():
+try:
+    output, _ = process.communicate(timeout=240)
+except subprocess.TimeoutExpired:
+    # Capture the blocked thread before terminating the test process.
+    sample = subprocess.run(
+        ["/usr/bin/sample", str(process.pid), "1", "1"],
+        capture_output=True, text=True, timeout=15,
+    )
+    process.kill()
+    output, _ = process.communicate()
+    print(output, flush=True)
+    print(sample.stdout, flush=True)
+    print(sample.stderr, file=sys.stderr, flush=True)
+    raise SystemExit("Lifecycle check timed out; thread sample is printed above")
+print(output)
+for line in output.splitlines():
     if "LIFECYCLE ERROR:" in line:
         # Surface the actual failure in the Actions summary as well as the logs.
         escaped = line.replace("%", "%25").replace("\r", "%0D")
         print(f"::error::{escaped}")
-if result.returncode != 0:
-    print(f"::error::Lifecycle process exited with code {result.returncode}")
-    raise SystemExit(f"Lifecycle check failed: exit code {result.returncode}")
-if "LIFECYCLE: close/reopen passed; requesting normal quit" not in result.stdout:
+if process.returncode != 0:
+    print(f"::error::Lifecycle process exited with code {process.returncode}")
+    raise SystemExit(f"Lifecycle check failed: exit code {process.returncode}")
+if "LIFECYCLE: close/reopen passed; requesting normal quit" not in output:
     raise SystemExit("Lifecycle check did not finish its window checks")
-if len(sys.argv) > 2 and "LIFECYCLE: transcription completed with cached model" not in result.stdout:
+if len(sys.argv) > 2 and "LIFECYCLE: transcription completed with cached model" not in output:
     raise SystemExit("Lifecycle check did not exercise the cached Whisper model")
 print("Lifecycle check passed: window reopened 3 times; application exited normally")

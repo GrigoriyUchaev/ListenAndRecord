@@ -28,6 +28,7 @@ enum LifecycleSelfTest {
                         throw SetupError("Reopening created duplicate main windows")
                     }
                 }
+                FileHandle.standardOutput.write(Data("LIFECYCLE: window cycles completed\n".utf8))
 
                 let environment = ProcessInfo.processInfo.environment
                 if let modelPath = environment["LISTENANDRECORD_LIFECYCLE_MODEL"] {
@@ -51,6 +52,7 @@ enum LifecycleSelfTest {
                         let transcriber = TranscriptionController.shared
                         transcriber.select(URL(fileURLWithPath: audioPath))
                         transcriber.start()
+                        FileHandle.standardOutput.write(Data("LIFECYCLE: transcription started\n".utf8))
                         try await waitUntil("transcription completion", timeoutSeconds: 180) {
                             switch transcriber.phase {
                             case .finished, .failed: return true
