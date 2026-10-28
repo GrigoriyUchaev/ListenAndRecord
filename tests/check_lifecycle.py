@@ -5,9 +5,20 @@ callback, or a stuck process fails this check.
 """
 import subprocess
 import sys
+import os
+
+if len(sys.argv) not in (2, 4):
+    raise SystemExit("Usage: check_lifecycle.py <app executable> [model audio]")
+environment = os.environ.copy()
+if len(sys.argv) == 4:
+    # Cocoa interprets positional file arguments as document-open requests,
+    # which can suppress the app's normal initial window presentation.
+    environment["LISTENANDRECORD_LIFECYCLE_MODEL"] = os.path.abspath(sys.argv[2])
+    environment["LISTENANDRECORD_LIFECYCLE_AUDIO"] = os.path.abspath(sys.argv[3])
 
 result = subprocess.run(
-    [sys.argv[1], "--lifecycle-selftest", *sys.argv[2:]],
+    [sys.argv[1], "--lifecycle-selftest"],
+    env=environment,
     capture_output=True,
     text=True,
     timeout=240,

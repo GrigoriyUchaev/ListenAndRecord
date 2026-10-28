@@ -29,10 +29,10 @@ enum LifecycleSelfTest {
                     }
                 }
 
-                let args = CommandLine.arguments
-                if let index = args.firstIndex(of: "--lifecycle-selftest"), args.count > index + 1 {
-                    guard args.count == index + 3 else {
-                        throw SetupError("Expected model and audio paths")
+                let environment = ProcessInfo.processInfo.environment
+                if let modelPath = environment["LISTENANDRECORD_LIFECYCLE_MODEL"] {
+                    guard let audioPath = environment["LISTENANDRECORD_LIFECYCLE_AUDIO"] else {
+                        throw SetupError("Expected lifecycle audio path")
                     }
                     let models = ModelManager.shared
                     let settings = AppSettings.shared
@@ -45,11 +45,11 @@ enum LifecycleSelfTest {
                             settings.language = oldLanguage
                             settings.useVAD = oldVAD
                         }
-                        models.selectedPath = args[index + 1]
+                        models.selectedPath = modelPath
                         settings.language = "en"
                         settings.useVAD = false
                         let transcriber = TranscriptionController.shared
-                        transcriber.select(URL(fileURLWithPath: args[index + 2]))
+                        transcriber.select(URL(fileURLWithPath: audioPath))
                         transcriber.start()
                         try await waitUntil("transcription completion", timeoutSeconds: 180) {
                             switch transcriber.phase {
