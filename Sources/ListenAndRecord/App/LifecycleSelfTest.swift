@@ -77,7 +77,10 @@ enum LifecycleSelfTest {
                 mainWindows.first(where: { $0.isVisible })?.performClose(nil)
                 try await waitUntil("window close before quit") { !mainWindows.contains(where: { $0.isVisible }) }
                 FileHandle.standardOutput.write(Data("LIFECYCLE: close/reopen passed; requesting normal quit\n".utf8))
-                NSApp.terminate(nil)
+                // A Dock quit arrives through AppKit's run loop, outside a Swift task.
+                // terminateLater can run a nested event loop, so don't block this
+                // MainActor task while shutdown needs to resume another one.
+                NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
             } catch {
                 FileHandle.standardError.write(Data("LIFECYCLE ERROR: \(error)\n".utf8))
                 exit(1)
