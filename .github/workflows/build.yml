@@ -23,6 +23,8 @@ jobs:
           curl -sSL -o /tmp/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
           build/ListenAndRecord.app/Contents/MacOS/ListenAndRecord --selftest /tmp/ggml-base.bin /tmp/pause.wav > /tmp/out.txt
           python3 tests/check_transcript.py /tmp/out.txt
+      - name: Quit after transcription — release cached Metal model before exit
+        run: python3 tests/check_lifecycle.py build/ListenAndRecord.app/Contents/MacOS/ListenAndRecord /tmp/ggml-base.bin /tmp/jfk.wav
       - name: Package
         run: cd build && ditto -c -k --keepParent ListenAndRecord.app ListenAndRecord-macOS.zip
       - uses: actions/upload-artifact@v4

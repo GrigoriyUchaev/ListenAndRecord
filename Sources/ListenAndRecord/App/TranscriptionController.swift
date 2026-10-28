@@ -25,7 +25,8 @@ final class TranscriptionController: ObservableObject {
     private var engine: WhisperEngine?
 
     var isRunning: Bool { phase == .running }
-    var hasPendingWork: Bool { task != nil || !pendingWork.isEmpty }
+    // The cached model owns Metal buffers even when no transcription is running.
+    var needsTerminationCleanup: Bool { engine != nil || task != nil || !pendingWork.isEmpty }
 
     func select(_ url: URL) {
         guard !isRunning else { return }

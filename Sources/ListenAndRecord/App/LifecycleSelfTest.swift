@@ -29,6 +29,49 @@ enum LifecycleSelfTest {
                     }
                 }
 
+                let args = CommandLine.arguments
+                if let index = args.firstIndex(of: "--lifecycle-selftest"), args.count > index + 1 {
+                    guard args.count == index + 3 else {
+                        throw SetupError("Expected model and audio paths")
+                    }
+                    let models = ModelManager.shared
+                    let settings = AppSettings.shared
+                    let oldPath = models.selectedPath
+                    let oldLanguage = settings.language
+                    let oldVAD = settings.useVAD
+                    do {
+                        defer {
+                            models.selectedPath = oldPath
+                            settings.language = oldLanguage
+                            settings.useVAD = oldVAD
+                        }
+                        models.selectedPath = args[index + 1]
+                        settings.language = "en"
+                        settings.useVAD = false
+                        let transcriber = TranscriptionController.shared
+                        transcriber.select(URL(fileURLWithPath: args[index + 2]))
+                        transcriber.start()
+                        try await waitUntil(timeoutSeconds: 180) {
+                            switch transcriber.phase {
+                            case .finished, .failed: return true
+                            default: return false
+                            }
+                        }
+                        guard transcriber.phase == .finished,
+                              let transcript = transcriber.transcript,
+                              TranscriptExporter.plainText(transcript, timestamps: false).lowercased().contains("country") else {
+                            throw SetupError("Lifecycle transcription failed: \(transcriber.phase)")
+                        }
+                        // Also cover the case where Cancel clears the UI task handle but
+                        // the cached model still owns Metal residency sets (the reported crash).
+                        transcriber.cancel()
+                        guard transcriber.needsTerminationCleanup else {
+                            throw SetupError("Cached model is missing from termination cleanup")
+                        }
+                        FileHandle.standardOutput.write(Data("LIFECYCLE: transcription completed with cached model\n".utf8))
+                    }
+                }
+
                 mainWindows.first(where: { $0.isVisible })?.performClose(nil)
                 try await waitUntil { !mainWindows.contains(where: { $0.isVisible }) }
                 FileHandle.standardOutput.write(Data("LIFECYCLE: close/reopen passed; requesting normal quit\n".utf8))
@@ -44,8 +87,8 @@ enum LifecycleSelfTest {
         NSApp.windows.filter { $0.title == "ListenAndRecord" && $0.canBecomeMain }
     }
 
-    private static func waitUntil(_ condition: () -> Bool) async throws {
-        for _ in 0..<200 {
+    private static func waitUntil(timeoutSeconds: Int = 10, _ condition: () -> Bool) async throws {
+        for _ in 0..<(timeoutSeconds * 20) {
             if condition() { return }
             try await Task.sleep(nanoseconds: 50_000_000)
         }

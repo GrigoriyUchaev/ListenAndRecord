@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         }
         let transcriber = TranscriptionController.shared
-        if recorder.isActive || transcriber.hasPendingWork {
+        if recorder.isActive || transcriber.needsTerminationCleanup {
             terminationTask = Task { @MainActor in
                 await recorder.stop()
                 await transcriber.stopForTermination()
