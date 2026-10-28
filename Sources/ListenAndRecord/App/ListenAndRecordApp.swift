@@ -35,6 +35,7 @@ struct ListenAndRecordApp: App {
                 .frame(minWidth: 620, minHeight: 640)
         }
         .windowResizability(.contentMinSize)
+        .presentMainWindowOnLaunch()
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Запись") {
@@ -55,6 +56,18 @@ struct ListenAndRecordApp: App {
                 .environmentObject(recorder)
         } label: {
             Image(systemName: recorder.menuBarSymbol)
+        }
+    }
+}
+
+private extension Scene {
+    @SceneBuilder
+    func presentMainWindowOnLaunch() -> some Scene {
+        if #available(macOS 15.0, *) {
+            // A singleton Window can otherwise restore its last, closed state on relaunch.
+            self.defaultLaunchBehavior(.presented)
+        } else {
+            self
         }
     }
 }

@@ -8,7 +8,7 @@ enum LifecycleSelfTest {
         guard CommandLine.arguments.contains("--lifecycle-selftest") else { return }
         Task { @MainActor in
             do {
-                try await waitUntil { delegate.openMainWindow != nil && mainWindows.contains(where: { $0.isVisible }) }
+                try await waitUntil("initial window on launch") { delegate.openMainWindow != nil && mainWindows.contains(where: { $0.isVisible }) }
                 guard !delegate.applicationShouldTerminateAfterLastWindowClosed(NSApp) else {
                     throw SetupError("Closing the window would terminate the application")
                 }
@@ -17,11 +17,11 @@ enum LifecycleSelfTest {
                         throw SetupError("Main window is missing")
                     }
                     window.performClose(nil)
-                    try await waitUntil { !mainWindows.contains(where: { $0.isVisible }) }
+                    try await waitUntil("window close") { !mainWindows.contains(where: { $0.isVisible }) }
 
                     // Use NSApp's installed delegate, just as the Dock reopen event does.
                     _ = NSApp.delegate?.applicationShouldHandleReopen?(NSApp, hasVisibleWindows: false)
-                    try await waitUntil { mainWindows.contains(where: { $0.isVisible }) }
+                    try await waitUntil("Dock reopen") { mainWindows.contains(where: { $0.isVisible }) }
                     _ = NSApp.delegate?.applicationShouldHandleReopen?(NSApp, hasVisibleWindows: true)
                     try await Task.sleep(nanoseconds: 200_000_000)
                     guard mainWindows.filter({ $0.isVisible }).count == 1 else {
@@ -51,7 +51,7 @@ enum LifecycleSelfTest {
                         let transcriber = TranscriptionController.shared
                         transcriber.select(URL(fileURLWithPath: args[index + 2]))
                         transcriber.start()
-                        try await waitUntil(timeoutSeconds: 180) {
+                        try await waitUntil("transcription completion", timeoutSeconds: 180) {
                             switch transcriber.phase {
                             case .finished, .failed: return true
                             default: return false
@@ -73,7 +73,7 @@ enum LifecycleSelfTest {
                 }
 
                 mainWindows.first(where: { $0.isVisible })?.performClose(nil)
-                try await waitUntil { !mainWindows.contains(where: { $0.isVisible }) }
+                try await waitUntil("window close before quit") { !mainWindows.contains(where: { $0.isVisible }) }
                 FileHandle.standardOutput.write(Data("LIFECYCLE: close/reopen passed; requesting normal quit\n".utf8))
                 NSApp.terminate(nil)
             } catch {
@@ -87,11 +87,11 @@ enum LifecycleSelfTest {
         NSApp.windows.filter { $0.title == "ListenAndRecord" && $0.canBecomeMain }
     }
 
-    private static func waitUntil(timeoutSeconds: Int = 10, _ condition: () -> Bool) async throws {
+    private static func waitUntil(_ operation: String, timeoutSeconds: Int = 10, _ condition: () -> Bool) async throws {
         for _ in 0..<(timeoutSeconds * 20) {
             if condition() { return }
             try await Task.sleep(nanoseconds: 50_000_000)
         }
-        throw SetupError("Timed out waiting for the main window")
+        throw SetupError("Timed out waiting for \(operation)")
     }
 }
