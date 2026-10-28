@@ -13,7 +13,15 @@ jobs:
       - name: Swift version
         run: swift --version
       - name: Build app bundle (whisper.cpp embedded)
-        run: ./scripts/build_app.sh
+        run: |
+          set -o pipefail
+          ./scripts/build_app.sh 2>&1 | python3 -u -c '
+          import sys
+          for line in sys.stdin:
+              print(line, end="")
+              if "error:" in line:
+                  print("::error::" + line.rstrip().replace("%", "%25"))
+          '
       - name: Window lifecycle — close, reopen from Dock callback, quit normally
         run: python3 tests/check_lifecycle.py build/ListenAndRecord.app/Contents/MacOS/ListenAndRecord
       - name: Self-test — transcribe a recording with long pauses
